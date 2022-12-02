@@ -1,0 +1,66 @@
+<html>
+<head>
+    <script type="module">
+        // Get Görli test Ether: https://goerli-faucet.pk910.de/
+
+        import { ethers } from "./ethers-5.6.esm.min.js";
+
+        // A Web3Provider wraps a standard Web3 provider, which is
+        // what MetaMask injects as window.ethereum into each page
+        const provider = new ethers.providers.Web3Provider(window.ethereum)
+
+        // MetaMask requires requesting permission to connect users accounts
+        await provider.send("eth_requestAccounts", []);
+
+        // The MetaMask plugin also allows signing transactions to
+        // send ether and pay to change state within the blockchain.
+        // For this, you need the account signer...
+        const signer = provider.getSigner()
+
+        // You can also use an ENS name for the contract address
+        const contractAddress = "0x7b6360A7D1668042A49a4Fb2eC615B72e947A1C0";
+
+        // The Contract ABI
+        const response = await fetch("./SwapContract.json");
+        const contractJson = await response.json();
+        const contractAbi = contractJson.abi;
+
+        // The Contract object
+        const swapContract = new ethers.Contract(contractAddress, contractAbi, provider);
+
+        console.log(swapContract);
+
+        window.createSwapContract = async function() {
+            const tx = await swapContract.connect(signer).createSwapContract();
+            console.log(tx);
+            const rc = await tx.wait();
+            const event = rc.events.find(event => event.event === 'CreateSwapContract');
+            const [creator, swapId] = event.args;
+            console.log("Created", swapId, "by", creator);
+        }
+
+        window.pushDataToSwapContract = async function(_swapId, _data) {
+            const tx = await swapContract.connect(signer).pushDataToSwapContract(_swapId, _data);
+            console.log(tx);
+            const rc = await tx.wait();
+            const event1 = rc.events.find(event => event.event === 'PushDataToSwapContract');
+            const [, swapId, data] = event1.args;
+            const event2 = rc.events.find(event => event.event === 'UpdateSwapContractVersion');
+            const [,, newVersion] = event2.args;
+            console.log("Added SwapContract hashData : ", data, " with version : ", newVersion, " to swapId : ", swapId);
+        }
+
+        window.listSwapContractVersions = async function(_swapId) {
+            for (let i = 1; i <= await swapContract.connect(signer).swapContractVersions(_swapId); i++) {
+                const hashData = await swapContract.connect(signer).retreiveSwapContractByIdVersion(_swapId, i);
+                console.log("SwapContract hashData : ", hashData, "on swapId : ", _swapId);
+            }
+        }
+
+        window.retreiveSwapContractByIdVersion = async function(_swapId, _version) {
+            const hashData = await swapContract.connect(signer).retreiveSwapContractByIdVersion(_swapId, _version);
+            console.log("Document : ", hashData, " on swapId : ", _swapId, " : version : ", _version);
+        }
+    </script>
+</head>
+</html>
